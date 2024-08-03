@@ -1,4 +1,4 @@
-#include"pthread_tcp.h"
+#include"process_tcp.h"
 
 void usage(char *s)
 {

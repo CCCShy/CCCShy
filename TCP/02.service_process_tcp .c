@@ -1,11 +1,20 @@
-#include"pthread_tcp.h"
+#include"process_tcp.h"
 
 void cli_data_handle(void *arg);
+
+void sig_child_handle(int signo)
+{
+    if(SIGCHLD == signo)
+    {
+        waitpid(-1, NULL, WNOHANG);
+    }
+}
 
 int main(int argc, char const *argv[])
 {
     int fd;
     struct sockaddr_in sin;
+    signal(SIGCHLD, sig_child_handle);
     //1.创建Socket fd
     if((fd = socket(AF_INET, SOCK_STREAM, 0)) < 0)
     {
@@ -51,12 +60,10 @@ int main(int argc, char const *argv[])
     int newfd = -1;
 //优化3：用多进程/多线程处理已经建立好连接的客户端数据
  //优化2：通过程序获取刚建立连接的socket的客户端的IP地址和端口号
+
     struct sockaddr_in cin;
     socklen_t addrlen = sizeof(cin);
-    pthread_t tid; 
-
-    // 创建线程
-    while(1)
+    while (1)
     {
         newfd = accept(fd, (struct sockaddr *)&cin, &addrlen);
         if(newfd == -1)
@@ -64,18 +71,31 @@ int main(int argc, char const *argv[])
             perror("accept");
             exit(-1);
         }
-
-        char ipv4_addr[16];
-        if(NULL == inet_ntop(AF_INET, (void *)&cin.sin_addr, ipv4_addr, sizeof(cin)))
+        pid_t pid = fork();
+        if(pid < 0)
         {
-            perror("inet_ntop");
+            perror("fork");
             exit(-1);
         }
-        printf("Client(%s:%d) is connected!\n",ipv4_addr, ntohs(cin.sin_port));
-        pthread_create(&tid, NULL, (void *)cli_data_handle, (void *)&newfd);
-        pthread_detach(tid);
+        if(pid == 0)//子进程
+        {
+            close(fd);
+            char ipv4_addr[16];
+            if(NULL == inet_ntop(AF_INET, (void *)&cin.sin_addr, ipv4_addr, sizeof(cin)))
+            {
+                perror("inet_ntop");
+                exit(-1);
+            }
+            printf("Client(%s:%d) is connected!\n",ipv4_addr, ntohs(cin.sin_port));
+            cli_data_handle(&newfd);
+            return 0;
+        }
+        else//父进程
+        {
+            close(newfd);
+        }
     }
-
+    
     close(fd);
     return 0;
 }
@@ -84,7 +104,7 @@ int main(int argc, char const *argv[])
 void cli_data_handle(void *arg)
 {
     int newfd = *(int *)arg;
-    printf("handler thread：newfd = %d\n", newfd);
+    printf("Child handler process：newfd = %d\n", newfd);
         // 5.读写
     char buf[BUFSIZE];
     int ret = -1;
