@@ -2,8 +2,8 @@
 
 void usage(char *s)
 {
-    printf("\n%s serv_ip serv_port", s);
-    printf("\n\t serv_ip:server ip address");
+    printf("\n%s serv_name serv_port", s);
+    printf("\n\t serv_name:server domain name or ip address");
     printf("\n\t serv_port:server port(>5000)\n\n");
 }
 
@@ -12,20 +12,11 @@ int main(int argc, char *argv[])
     int fd;
     struct sockaddr_in sin;
     short port;
-    struct hostent *hs = NULL;
 
     if(argc != 3)
     {
         usage(argv[0]);
         exit(-1);
-    }
-
-    //域名解析以及检查域名解析是否出错
-    hs = gethostbyname(argv[1]);
-    if(hs == NULL)
-    {
-        herror("gethostbyname error");
-        eixt(-1);
     }
 
     //1.创建Socket fd
@@ -47,8 +38,8 @@ int main(int argc, char *argv[])
     bzero(&sin,sizeof(sin));
     sin.sin_family = AF_INET;
     sin.sin_port = htons(port);
-#if 1
-    sin.sin_addr.s_addr = *((uint32_t *)hs->h_addr);
+#if 0
+    sin.sin_addr.s_addr = inet_addr(SERV_IP_ADDR);
 #else
     if(inet_pton(AF_INET, argv[1], (void *)&sin.sin_addr.s_addr) != 1)
     {
@@ -56,9 +47,6 @@ int main(int argc, char *argv[])
         exit(-1);
     }
 #endif
-    endhostent();//释放结构体
-    hs = NULL;//防止出现野指针
-
     if(connect(fd, (struct sockaddr *)&sin, sizeof(sin)) < 0)
     {
         perror("connect");
