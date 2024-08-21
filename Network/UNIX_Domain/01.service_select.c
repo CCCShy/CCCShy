@@ -1,4 +1,4 @@
-#include"DNS.h"
+#include"select.h"
 
 void cli_data_handle(void *arg);
 
@@ -13,47 +13,33 @@ void sig_child_handle(int signo)
 int main(int argc, char const *argv[])
 {
     int fd;
-    struct sockaddr_in sin;
+    struct sockaddr_un sun;
     signal(SIGCHLD, sig_child_handle);
     //1.创建Socket fd
-    if((fd = socket(AF_INET, SOCK_STREAM, 0)) < 0)
+    if((fd = socket(AF_UNIX, SOCK_STREAM, 0)) < 0)//基于本地的TCP通信
     {
         perror("socket");
         exit(-1);
     }
 
-    //优化4：允许绑定地址快速重用
+    //允许绑定地址快速重用
     int b_reuse = 1;               
     setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &b_reuse, sizeof(int));
-#if 0
-        /* 允许广播 */
-        int b_br = 1;
-        setsockopt(fd, SOL_SOCKET, SO_BROADCAST, &b_br, sizeof(int));
-
-        /* 设置接收超时 */
-        struct timeval tout;
-        tout.tv_sec = 5;
-        tout.tv_usec = 0;
-        setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tout, sizeof(struct timeval));
-#endif
 
     // 2.绑定
-    // 填充struct sockaddr_in结构体变量
-    bzero(&sin,sizeof(sin));
-    sin.sin_family = AF_INET;
-    sin.sin_port = htons(SERV_PORT);//网络字节序的端口号
-    // 优化1：让服务器能绑定在任意的IP上
-#if 1
-    sin.sin_addr.s_addr = htonl(INADDR_ANY);
-    //sin.sin_addr.s_addr = inet_addr(SERV_IP_ADDR);//支持IPV4
-#else
-    if(inet_pton(AF_INET, SERV_IP_ADDR, (void *)&sin.sin_addr) != 1)
+    // 填充struct sockaddr_un结构体变量
+    bzero(&sun,sizeof(sun));
+    sun.sun_family = AF_UNIX;
+    
+    //如果UNIX_DOMAIN_FILE所指向的文件存在，则删除
+    if(access(UNIX_DOMAIN_FILE, F_OK) == 0)
     {
-        perror("inet_pton");
-        exit(-1);
+        unlink(UNIX_DOMAIN_FILE);//删除文件函数
     }
-#endif
-    if(bind(fd, (struct sockaddr *)&sin, sizeof(sin)) < 0)
+    strncpy(sun.sun_path, UNIX_DOMAIN_FILE, strlen(UNIX_DOMAIN_FILE));
+
+
+    if(bind(fd, (struct sockaddr *)&sun, sizeof(sun)) < 0)
     {
         perror("bind");
         exit(-1);
@@ -65,18 +51,14 @@ int main(int argc, char const *argv[])
         perror("listen");
         exit(-1);
     }
-    printf("Server starting...OK!\n");
+    printf("UNIX domain starting...OK!\n");
 
     // 4.accept()函数阻塞等待客户端连接请求
     int newfd = -1;
-//优化3：用多进程/多线程处理已经建立好连接的客户端数据
- //优化2：通过程序获取刚建立连接的socket的客户端的IP地址和端口号
 
-    struct sockaddr_in cin;
-    socklen_t addrlen = sizeof(cin);
     while (1)
     {
-        newfd = accept(fd, (struct sockaddr *)&cin, &addrlen);
+        newfd = accept(fd, NULL, NULL);
         if(newfd == -1)
         {
             perror("accept");
@@ -91,13 +73,7 @@ int main(int argc, char const *argv[])
         if(pid == 0)//子进程
         {
             close(fd);
-            char ipv4_addr[16];
-            if(NULL == inet_ntop(AF_INET, (void *)&cin.sin_addr, ipv4_addr, sizeof(cin)))
-            {
-                perror("inet_ntop");
-                exit(-1);
-            }
-            printf("Client(%s:%d) is connected!\n",ipv4_addr, ntohs(cin.sin_port));
+            printf("Client is connected!\n");
             cli_data_handle(&newfd);
             return 0;
         }
