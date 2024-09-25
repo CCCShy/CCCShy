@@ -13,12 +13,12 @@
 #一、创建表时设置标识列
 DROP TABLE IF EXISTS tab_identity;
 CREATE  TABLE tab_identity(
-	id INT,
-	NAME DOUBLE UNIQUE,
+	id INT PRIMARY KEY AUTO_INCREMENT,
+	NAME VARCHAR(20),
 	seat INT
 );
 TRUNCATE TABLE tab_identity;
-INSERT INTO tab_identity VALUES(NULL,'Sun');
+INSERT INTO tab_identity VALUES(NULL,'Sun',1);
 INSERT INTO tab_identity(NAME) VALUES('Han');
 SELECT * FROM tab_identity;
 DESC tab_identity;
